@@ -18,3 +18,5 @@ click>=8.0
 pyyaml>=6.0
 # FVCOM output reading (required for simulation-based dynamic metrics)
 netCDF4>=1.6
+# Mesh generation backend
+oceanmesh
