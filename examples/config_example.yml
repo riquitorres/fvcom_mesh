@@ -1,0 +1,81 @@
+# Example FVCOM mesh configuration file
+# All paths are absolute or relative to the working directory.
+# Distances are in metres (projected CRS).
+
+# ── Inputs ──────────────────────────────────────────────────────────────────
+
+# Outer domain boundary (closed polygon shapefile, any CRS)
+domain_shapefile: "input/domain_boundary.shp"
+
+# Shoreline / water-mask polygons or closed polylines
+water_mask_shapefile: "input/shoreline.shp"
+
+# Optional: DEM / bathymetry raster (GeoTIFF, any CRS)
+# dem: "input/bathymetry.tif"
+
+# Optional: explicit OBC segment polylines
+# obc_shapefile: "input/open_boundary.shp"
+
+# ── Projection ──────────────────────────────────────────────────────────────
+
+# Target projected CRS (EPSG code or WKT string, must be in metres)
+# Example: UTM zone 43N for the Maldives region
+projection: "EPSG:32643"
+
+# ── Mesh size parameters ─────────────────────────────────────────────────────
+
+h_min: 50.0        # minimum element size (m)
+h_max: 2000.0      # maximum element size (m)
+delta_w: 100.0     # minimum channel width threshold (m)
+
+# ── Algorithm parameters ─────────────────────────────────────────────────────
+
+# Background grid resolution (default = h_min / 4)
+# bg_resolution: 12.5
+
+# Medial axis method: false = skimage skeletonize (fast), true = VDT divergence
+use_vdt_medial: false
+
+# Minimum island area to preserve (m²); smaller islands are filled
+# min_island_area: 2500.0
+
+# Minimum constraint polyline length to keep (m)
+# min_constraint_length: 50.0
+
+# Junction merge tolerance (m)
+# junction_tol: 100.0
+
+# Cubic spline smoothing target RMSE (m)
+# smoothing_rmse: 5.0
+
+# Curvature constant K in h_0 = 1 / (K * kappa)
+curvature_constant: 2.0
+
+# Maximum spatial gradient of mesh-size function (dimensionless)
+gradient_limit: 0.3
+
+# 2-D DistMesh iterations and tolerance
+max_iter_2d: 200
+tol_2d: 0.001
+
+# ── OBC / sponge layer ───────────────────────────────────────────────────────
+
+# Tolerance for snapping mesh nodes to the domain boundary (m)
+obc_tol: 100.0
+
+# FVCOM OBC type (1 = prescribed elevation)
+obc_type: 1
+
+# Optional sponge layer
+# sponge_radius: 500.0   # metres
+# sponge_coeff: 0.01
+
+# ── Depth ────────────────────────────────────────────────────────────────────
+
+# Fallback depth for nodes where the DEM is absent / NaN (m)
+default_depth: 5.0
+
+# ── Output ───────────────────────────────────────────────────────────────────
+
+# File prefix; FVCOM files will be <output_prefix>_{grd,dep,obc,spg}.dat
+output_prefix: "output/my_domain"

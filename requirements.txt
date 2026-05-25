@@ -1,0 +1,20 @@
+# Core numerics (numpy/scipy inherited from cray-python via --system-site-packages)
+numpy>=1.23
+scipy>=1.10
+# Geometry
+shapely>=2.0
+geopandas>=0.14
+fiona>=1.9
+# Raster / DEM
+rasterio>=1.3
+# Image processing (medial axis, morphology)
+scikit-image>=0.20
+# Coordinate projections
+pyproj>=3.4
+# Visualisation
+matplotlib>=3.6
+# CLI
+click>=8.0
+pyyaml>=6.0
+# FVCOM output reading (required for simulation-based dynamic metrics)
+netCDF4>=1.6

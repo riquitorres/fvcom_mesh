@@ -1,0 +1,2 @@
+[console_scripts]
+fvcom-mesh = fvcom_mesh.cli:main

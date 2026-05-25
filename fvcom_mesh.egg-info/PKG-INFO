@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: fvcom_mesh
+Version: 0.1.0
+Summary: Automatic unstructured mesh generator for FVCOM (based on ADMESH+ methodology)
+Requires-Python: >=3.10
+Requires-Dist: numpy>=1.23
+Requires-Dist: scipy>=1.10
+Requires-Dist: shapely>=2.0
+Requires-Dist: geopandas>=0.14
+Requires-Dist: fiona>=1.9
+Requires-Dist: rasterio>=1.3
+Requires-Dist: scikit-image>=0.20
+Requires-Dist: pyproj>=3.4
+Requires-Dist: matplotlib>=3.6
+Requires-Dist: click>=8.0

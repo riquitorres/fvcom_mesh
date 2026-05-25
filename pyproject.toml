@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fvcom_mesh"
+version = "0.1.0"
+description = "Automatic unstructured mesh generator for FVCOM (based on ADMESH+ methodology)"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.23",
+    "scipy>=1.10",
+    "shapely>=2.0",
+    "geopandas>=0.14",
+    "fiona>=1.9",
+    "rasterio>=1.3",
+    "scikit-image>=0.20",
+    "pyproj>=3.4",
+    "matplotlib>=3.6",
+    "click>=8.0",
+]
+
+[project.scripts]
+fvcom-mesh = "fvcom_mesh.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fvcom_mesh*"]
