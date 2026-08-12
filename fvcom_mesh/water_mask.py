@@ -294,6 +294,7 @@ def fill_level2_mask(
     dx: float,
     dy: float,
     d_boundary: NDArray[np.float64],
+    delta_w: float = 0.0,
 ) -> tuple[NDArray[np.bool_], NDArray[np.bool_]]:
     """Apply the maximal-disk filling to level-2 masks.
 
@@ -312,8 +313,16 @@ def fill_level2_mask(
     l2_dist = d_boundary[level2]
     if l2_dist.size == 0:
         return level1, level2
-    radius_px = int(np.round(np.median(l2_dist) / ((dx + dy) / 2)))
+    pixel_size = (dx + dy) / 2.0
+    radius_px = int(np.round(np.median(l2_dist) / pixel_size))
     radius_px = max(1, radius_px)
+
+    # Cap at delta_w scale: the fill is meant to bridge level-1 gaps, not
+    # dilate across the entire domain.  Large open-water regions would
+    # otherwise produce a disk with millions of pixels and exhaust memory.
+    if delta_w > 0:
+        max_radius_px = max(1, int(np.ceil(delta_w / pixel_size)))
+        radius_px = min(radius_px, max_radius_px)
 
     selem = disk(radius_px)
     level2_filled = binary_dilation(level2, selem)
@@ -372,7 +381,7 @@ def process_water_mask(
         masks.land, dx, dy, delta_w, use_vdt_medial
     )
     d_boundary_land = distance_transform_edt(masks.land, sampling=(dy, dx))
-    land_l1, land_l2 = fill_level2_mask(land_l1, land_l2, dx, dy, d_boundary_land)
+    land_l1, land_l2 = fill_level2_mask(land_l1, land_l2, dx, dy, d_boundary_land, delta_w)
     masks.land_l1 = land_l1
     masks.land_l2 = land_l2
 
@@ -381,7 +390,7 @@ def process_water_mask(
         masks.water, dx, dy, delta_w, use_vdt_medial
     )
     d_boundary_water = distance_transform_edt(masks.water, sampling=(dy, dx))
-    water_l1, water_l2 = fill_level2_mask(water_l1, water_l2, dx, dy, d_boundary_water)
+    water_l1, water_l2 = fill_level2_mask(water_l1, water_l2, dx, dy, d_boundary_water, delta_w)
     masks.water_l1 = water_l1
     masks.water_l2 = water_l2
 
@@ -403,7 +412,7 @@ def process_water_mask(
         water_updated, dx, dy, delta_w, use_vdt_medial
     )
     d_bnd_upd = distance_transform_edt(water_updated, sampling=(dy, dx))
-    water_l1_f, water_l2_f = fill_level2_mask(water_l1_f, water_l2_f, dx, dy, d_bnd_upd)
+    water_l1_f, water_l2_f = fill_level2_mask(water_l1_f, water_l2_f, dx, dy, d_bnd_upd, delta_w)
     masks.water_l1_final = water_l1_f
     masks.water_l2_final = water_l2_f
 

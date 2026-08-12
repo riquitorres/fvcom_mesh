@@ -1,3 +1,6 @@
+# Geospatial C library (install via conda-forge before pip dependencies)
+# Pin to match system libgdal version: gdal-config --version
+gdal==3.4.1
 # Core numerics (numpy/scipy inherited from cray-python via --system-site-packages)
 numpy>=1.23
 scipy>=1.10
@@ -19,4 +22,4 @@ pyyaml>=6.0
 # FVCOM output reading (required for simulation-based dynamic metrics)
 netCDF4>=1.6
 # Mesh generation backend
-oceanmesh
+git+ssh://git@github.com/riquitorres/oceanmesh.git

@@ -5,16 +5,34 @@
 # ── Inputs ──────────────────────────────────────────────────────────────────
 
 # Outer domain boundary (closed polygon shapefile, any CRS)
-domain_shapefile: "input/domain_boundary.shp"
+domain_shapefile: "/home/ricardo/Data/maldives_shp/domain_exterior.shp"
 
 # Shoreline / water-mask polygons or closed polylines
-water_mask_shapefile: "input/shoreline.shp"
+water_mask_shapefile: "/home/ricardo/Data/maldives_shp/maldives_admin_islands.shp"
+
+# Set to true when the shapefile contains LAND polygons (e.g. island/atoll
+# admin boundaries) so the water area is derived as domain minus land.
+# Set to false (default) when the shapefile directly represents ocean/water.
+water_mask_inverted: true
+
+# Optional: derive the water mask from the DEM bathymetry at a depth contour
+# instead of using water_mask_shapefile.  Set the depth threshold in metres
+# (positive = below sea level, FVCOM convention).  Requires 'dem' to be set.
+# When active, water_mask_shapefile is ignored.
+# coastline_contour_depth: 0.0
 
 # Optional: DEM / bathymetry raster (GeoTIFF, any CRS)
-# dem: "input/bathymetry.tif"
+dem: "/home/ricardo/Data/reefMaldives/bathymetry/Surface0_35.geotiff"
+
+# DEM depth convention:
+#   true  (default) — values are positive below sea level (FVCOM convention);
+#                     the loader negates standard elevation files automatically.
+#   false           — values are negative below sea level (standard GeoTIFF /
+#                     elevation convention); no negation is applied.
+dem_positive_depth: false
 
 # Optional: explicit OBC segment polylines
-# obc_shapefile: "input/open_boundary.shp"
+# obc_shapefile: "/home/ricardo/Data/reefMaldives/open_boundary.shp"
 
 # ── Projection ──────────────────────────────────────────────────────────────
 
@@ -25,13 +43,18 @@ projection: "EPSG:32643"
 # ── Mesh size parameters ─────────────────────────────────────────────────────
 
 h_min: 50.0        # minimum element size (m)
-h_max: 2000.0      # maximum element size (m)
-delta_w: 100.0     # minimum channel width threshold (m)
+h_max: 500.0      # maximum element size (m)
+delta_w: 50.0     # minimum channel width threshold (m)
 
 # ── Algorithm parameters ─────────────────────────────────────────────────────
 
+# Triangulation backend:
+#   distmesh   (default) — force-based iterative DistMesh; good for small/medium domains
+#   oceanmesh            — C++ Delaunay via OceanMesh; faster and lower memory at fine resolution
+backend: oceanmesh
+
 # Background grid resolution (default = h_min / 4)
-# bg_resolution: 12.5
+# bg_resolution: 25
 
 # Medial axis method: false = skimage skeletonize (fast), true = VDT divergence
 use_vdt_medial: false
@@ -46,13 +69,19 @@ use_vdt_medial: false
 # junction_tol: 100.0
 
 # Cubic spline smoothing target RMSE (m)
-# smoothing_rmse: 5.0
+smoothing_rmse: 5.0
 
 # Curvature constant K in h_0 = 1 / (K * kappa)
-curvature_constant: 2.0
+curvature_constant: 4.0
 
 # Maximum spatial gradient of mesh-size function (dimensionless)
-gradient_limit: 0.3
+gradient_limit: 0.1
+
+# Optional: blend a depth-proportional mesh-size component with the
+# curvature-based sizing.  Element size = depth_size_factor * |depth|,
+# clamped to [h_min, h_max].  Requires 'dem' to be set.
+# Example: 2.0 → elements are at most 2× the local water depth.
+depth_size_factor: 1.0
 
 # 2-D DistMesh iterations and tolerance
 max_iter_2d: 200
@@ -78,4 +107,4 @@ default_depth: 5.0
 # ── Output ───────────────────────────────────────────────────────────────────
 
 # File prefix; FVCOM files will be <output_prefix>_{grd,dep,obc,spg}.dat
-output_prefix: "output/my_domain"
+output_prefix: "output/maldives_mesh"

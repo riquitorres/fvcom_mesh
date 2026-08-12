@@ -28,14 +28,29 @@ def main() -> None:
     help="Override output directory from config.",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Print detailed progress.")
-def run(config: Path, output_dir: Path | None, verbose: bool) -> None:
+@click.option(
+    "--backend",
+    type=click.Choice(["distmesh", "oceanmesh"], case_sensitive=False),
+    default=None,
+    help="Triangulation backend (overrides 'backend' in config).",
+)
+@click.option(
+    "--plot-dir", "plot_dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Save mesh and quality plots as PNG files in this directory.",
+)
+def run(config: Path, output_dir: Path | None, verbose: bool, backend: str | None, plot_dir: Path | None) -> None:
     """Generate a mesh from a YAML configuration file and write FVCOM output."""
     from .core import MeshGenerator
 
     mg = MeshGenerator.from_config(config, output_dir_override=output_dir)
+    if backend is not None:
+        mg.config["backend"] = backend.lower()
     if verbose:
         click.echo(f"Loaded config: {config}")
         click.echo(f"Output prefix: {mg.config.get('output_prefix', 'mesh')}")
+        click.echo(f"Triangulation backend: {mg.config.get('backend', 'distmesh')}")
 
     click.echo("Running mesh generation pipeline …")
     mesh = mg.run()
@@ -46,6 +61,17 @@ def run(config: Path, output_dir: Path | None, verbose: bool) -> None:
         print_quality_report(q)
 
     click.echo(f"Done.  Wrote {len(mesh.triangles)} elements, {len(mesh.pts)} nodes.")
+
+    if plot_dir is not None:
+        from .mesh_quality import plot_mesh_report
+        import matplotlib
+        matplotlib.use("Agg")
+        depths = mesh.depths if mesh.depths is not None and len(mesh.depths) > 0 else None
+        plot_mesh_report(
+            mesh.pts, mesh.triangles, depths,
+            save_dir=plot_dir, show=False,
+        )
+        click.echo(f"Saved plots: {plot_dir}")
 
 
 @main.command()

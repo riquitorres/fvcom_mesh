@@ -330,3 +330,42 @@ def build_mesh_size_function(
         )
 
     return MeshSizeFunction(h_limited, grid, h_min, h_max)
+
+
+# ---------------------------------------------------------------------------
+# Depth-based mesh-size component
+# ---------------------------------------------------------------------------
+
+def build_depth_size_grid(
+    grid: "BackgroundGrid",
+    dem,
+    depth_size_factor: float,
+    h_min: float,
+    h_max: float,
+) -> NDArray[np.float64]:
+    """Build a mesh-size grid proportional to local water depth.
+
+    h_depth(x, y) = clip(depth_size_factor * |depth(x, y)|, h_min, h_max)
+
+    Parameters
+    ----------
+    grid : BackgroundGrid
+    dem : DEM object with ``.sample(pts)`` method
+    depth_size_factor : ratio of element size to water depth (e.g. 2.0 means
+                        elements are at most 2× the local depth)
+    h_min, h_max : size clamps (metres)
+
+    Returns
+    -------
+    h_depth : (ny, nx) float array of depth-based mesh sizes
+    """
+    xx, yy = np.meshgrid(grid.x, grid.y)
+    pts_flat = np.column_stack([xx.ravel(), yy.ravel()])
+    depth_flat = dem.sample(pts_flat)
+
+    h_flat = np.where(
+        np.isnan(depth_flat),
+        h_max,
+        np.clip(depth_size_factor * np.abs(depth_flat), h_min, h_max),
+    )
+    return h_flat.reshape(grid.shape)

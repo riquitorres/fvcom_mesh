@@ -37,7 +37,31 @@ The `--system-site-packages` flag inherits NumPy 1.23 and SciPy 1.10 from
 GeoPandas, rasterio, scikit-image, pyproj, matplotlib, click, PyYAML) are
 installed from PyPI automatically.
 
+### Conda (recommended for local development)
+
+Create and activate the environment using the provided `environment.yml`,
+which pulls all dependencies (including `oceanmesh`) from `conda-forge`:
+
+```bash
+conda env create -f environment.yml
+conda activate reefMaldives
+```
+
+The package itself is installed in editable mode automatically.
+
 ### General
+
+GDAL must be installed before the Python dependencies.
+
+**Ubuntu/Debian** — install the system library, then match the pip package to its version:
+
+```bash
+sudo apt install libgdal-dev
+gdal-config --version   # e.g. 3.8.4
+pip install gdal==3.8.4
+```
+
+Then install the package:
 
 ```bash
 pip install -e .

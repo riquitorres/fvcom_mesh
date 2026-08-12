@@ -56,7 +56,6 @@ def validate_config(cfg: dict[str, Any]) -> list[str]:
     issues: list[str] = []
     required = [
         "domain_shapefile",
-        "water_mask_shapefile",
         "projection",
         "h_min",
         "h_max",
@@ -66,6 +65,13 @@ def validate_config(cfg: dict[str, Any]) -> list[str]:
     for key in required:
         if key not in cfg:
             issues.append(f"Missing required key: '{key}'")
+    # water_mask_shapefile is required unless coastline_contour_depth + dem are provided
+    has_contour = "coastline_contour_depth" in cfg and "dem" in cfg
+    if not has_contour and "water_mask_shapefile" not in cfg:
+        issues.append(
+            "Missing 'water_mask_shapefile' (required when "
+            "'coastline_contour_depth' + 'dem' are not both set)"
+        )
     if "h_min" in cfg and "h_max" in cfg:
         if cfg["h_min"] >= cfg["h_max"]:
             issues.append("h_min must be less than h_max")
@@ -308,14 +314,32 @@ class MeshGenerator:
             water = self._water_geom
             dem = self._dem_obj
         else:
-            from .inputs import load_domain_boundary, load_water_mask, load_dem
+            from .inputs import load_domain_boundary, load_water_mask, load_dem, coastline_from_dem
 
             domain = load_domain_boundary(cfg["domain_shapefile"], projection)
-            water = load_water_mask(cfg["water_mask_shapefile"], domain, projection)
 
             dem = None
             if cfg.get("dem"):
-                dem = load_dem(cfg["dem"], domain, projection, positive_depth=True)
+                positive_depth = bool(cfg.get("dem_positive_depth", True))
+                dem = load_dem(cfg["dem"], domain, projection, positive_depth=positive_depth)
+
+            if "coastline_contour_depth" in cfg and dem is not None:
+                contour_depth = float(cfg["coastline_contour_depth"])
+                positive_depth = bool(cfg.get("dem_positive_depth", True))
+                log.info("Deriving water mask from DEM at depth=%.2f m", contour_depth)
+                _step(t0, "Phase 1/9  deriving coastline from DEM",
+                      f"contour_depth={contour_depth:.2f} m")
+                water = coastline_from_dem(dem, domain, contour_depth, positive_depth=positive_depth)
+            else:
+                invert = bool(cfg.get("water_mask_inverted", False))
+                water = load_water_mask(cfg["water_mask_shapefile"], domain, projection,
+                                        invert=invert)
+
+        # ---- Phase 0 (post-load): plot inputs ----
+        _step(t0, "Phase 0/9  plotting inputs")
+        from .plots import plot_inputs
+        _plot_path = plot_inputs(domain, water, dem, self._output_prefix())
+        _step(t0, "Phase 0/9  inputs plot saved", str(_plot_path))
 
         # ---- Phase 2: build background grid + rasterise ----
         # Default resolution: coarser of h_min/4 and delta_w/4.
@@ -360,11 +384,37 @@ class MeshGenerator:
         # ---- Phase 5: mesh-size function ----
         log.info("Phase 5: building mesh-size function")
         _step(t0, "Phase 5/9  mesh-size function", f"h_min={h_min:.0f} h_max={h_max:.0f}")
-        from .mesh_size import build_mesh_size_function
+        from .mesh_size import build_mesh_size_function, build_depth_size_grid
+        from .mesh_size import (
+            initial_size_on_constraints, build_size_grid,
+            gradient_limiting_2d_vectorised, MeshSizeFunction,
+        )
 
         K = float(cfg.get("curvature_constant", 2.0))
         g = float(cfg.get("gradient_limit", 0.3))
-        h_func = build_mesh_size_function(constraints, grid, K, h_min, h_max, g)
+
+        depth_size_factor = cfg.get("depth_size_factor")
+        if depth_size_factor is not None and dem is not None:
+            # Build constraint-based seed grid
+            pts_list, size_list = initial_size_on_constraints(constraints, K, h_min, h_max)
+            h_grid = build_size_grid(grid, pts_list, size_list, h_max)
+            # Build depth-based size grid and take element-wise minimum
+            h_depth = build_depth_size_grid(grid, dem, float(depth_size_factor), h_min, h_max)
+            h_grid = np.minimum(h_grid, h_depth)
+            _step(t0, "Phase 5/9  blending depth-based sizing",
+                  f"depth_size_factor={depth_size_factor}")
+            h_limited = gradient_limiting_2d_vectorised(h_grid, g, grid.dx, grid.dy)
+            h_func = MeshSizeFunction(h_limited, grid, h_min, h_max)
+        else:
+            h_func = build_mesh_size_function(constraints, grid, K, h_min, h_max, g)
+
+        # ---- Plot mesh-size function ----
+        try:
+            from .plots import plot_mesh_size
+            _sz_path = plot_mesh_size(grid, h_func, water, self._output_prefix())
+            _step(t0, "Phase 5/9  mesh-size plot saved", str(_sz_path))
+        except Exception as _e:
+            log.warning("Could not save mesh-size plot: %s", _e)
 
         # ---- Phase 6: 1-D node placement ----
         log.info("Phase 6: 1-D node placement")

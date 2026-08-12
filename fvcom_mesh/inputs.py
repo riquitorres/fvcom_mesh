@@ -60,6 +60,8 @@ def load_water_mask(
     shp_path: str | Path,
     domain: Polygon,
     target_crs: str | CRS,
+    *,
+    invert: bool = False,
 ) -> MultiPolygon | Polygon:
     """Load the water mask (wet area) from a shoreline shapefile.
 
@@ -75,6 +77,10 @@ def load_water_mask(
     shp_path : path to shoreline shapefile
     domain : outer domain boundary polygon (in *target_crs*)
     target_crs : target projected CRS
+    invert : if ``True``, treat the shapefile as **land** polygons and derive
+             the water area as ``domain - land``.  Use this when the shapefile
+             contains coastline / island / admin boundaries rather than ocean
+             polygons.
     """
     gdf = gpd.read_file(shp_path)
     if gdf.crs is None:
@@ -83,12 +89,12 @@ def load_water_mask(
 
     geom_types = set(gdf.geometry.geom_type.unique())
     if geom_types <= {"Polygon", "MultiPolygon"}:
-        water = unary_union(gdf.geometry.values)
+        geom = unary_union(gdf.geometry.values)
     elif geom_types <= {"LineString", "MultiLineString"}:
         from shapely.ops import polygonize
         all_lines = unary_union(gdf.geometry.values)
-        water = unary_union(list(polygonize(all_lines)))
-        if water.is_empty:
+        geom = unary_union(list(polygonize(all_lines)))
+        if geom.is_empty:
             raise ValueError(
                 "Could not polygonise the shoreline linestrings. "
                 "Ensure they form closed rings."
@@ -101,10 +107,15 @@ def load_water_mask(
                 f"Unsupported geometry types in water mask: {geom_types}. "
                 "Provide Polygon or LineString data."
             )
-        water = unary_union(polys.geometry.values)
+        geom = unary_union(polys.geometry.values)
 
-    # Clip to domain
-    water = water.intersection(domain)
+    if invert:
+        # Shapefile contains land polygons — water is everything else in domain
+        land = geom.intersection(domain)
+        water = domain.difference(land)
+    else:
+        water = geom.intersection(domain)
+
     if water.is_empty:
         raise ValueError("Water mask does not overlap the domain boundary.")
     return water
@@ -254,3 +265,73 @@ def load_dem(
         data_clip = -data_clip  # elevation → depth (positive = below sea level)
 
     return DEM(data_clip, x_clip, y_clip, target_crs_obj)
+
+
+# ---------------------------------------------------------------------------
+# Coastline extraction from DEM
+# ---------------------------------------------------------------------------
+
+def coastline_from_dem(
+    dem: "DEM",
+    domain: Polygon,
+    contour_depth: float = 0.0,
+    positive_depth: bool = True,
+) -> "MultiPolygon | Polygon":
+    """Derive a water-mask polygon from a DEM by thresholding at *contour_depth*.
+
+    Parameters
+    ----------
+    dem : DEM object produced by :func:`load_dem`
+    domain : outer domain boundary polygon (same CRS as DEM)
+    contour_depth : depth threshold in metres (default ``0.0`` = sea level)
+    positive_depth : if ``True`` (FVCOM convention), water pixels satisfy
+                     ``dem.data >= contour_depth``; if ``False`` (standard
+                     elevation convention, negative = below sea level), water
+                     pixels satisfy ``dem.data <= contour_depth``.
+
+    Returns
+    -------
+    Shapely Polygon or MultiPolygon representing the wet area
+    """
+    import rasterio.features
+    import rasterio.transform
+
+    # Build binary water mask: 1 = water, 0 = land / nodata
+    # dem.data rows are south→north (y increasing); rasterio expects north→south
+    data_ns = dem.data[::-1, :]  # flip back to north→south
+    if positive_depth:
+        condition = data_ns >= contour_depth   # positive depth ≥ threshold = water
+    else:
+        condition = data_ns <= contour_depth   # elevation ≤ threshold = below sea level
+    water_mask = np.where(np.isnan(data_ns), np.uint8(0), condition.astype(np.uint8))
+
+    # Reconstruct rasterio Affine transform from pixel-centre coordinates
+    # dem.x / dem.y are pixel centres; after the north→south flip, the
+    # northernmost row is dem.y[-1].
+    dx = float(dem.x[1] - dem.x[0]) if len(dem.x) > 1 else 1.0
+    dy = float(dem.y[1] - dem.y[0]) if len(dem.y) > 1 else 1.0  # positive
+
+    west  = float(dem.x[0])  - dx / 2.0
+    north = float(dem.y[-1]) + dy / 2.0
+    transform = rasterio.transform.from_origin(west, north, dx, dy)
+
+    # Vectorise water pixels
+    polys = [
+        shape(geom)
+        for geom, val in rasterio.features.shapes(water_mask, transform=transform)
+        if val == 1
+    ]
+
+    if not polys:
+        raise ValueError(
+            f"No water area found at contour_depth={contour_depth} m. "
+            "Check the depth value and DEM coverage."
+        )
+
+    water = unary_union(polys).intersection(domain)
+    if water.is_empty:
+        raise ValueError(
+            f"DEM-derived water mask at depth={contour_depth} m does not "
+            "overlap the domain boundary."
+        )
+    return water
